@@ -1,6 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import {
+  useEffect,
+  useState
+} from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -30,6 +33,37 @@ export default function NovoPedidoPage() {
   const [salvando, setSalvando] =
     useState(false)
 
+  const [mobile, setMobile] =
+    useState(false)
+
+  const [expandido, setExpandido] =
+    useState<any>({})
+
+  useEffect(() => {
+
+    function verificarTela() {
+
+      setMobile(
+        window.innerWidth < 768
+      )
+
+    }
+
+    verificarTela()
+
+    window.addEventListener(
+      'resize',
+      verificarTela
+    )
+
+    return () =>
+      window.removeEventListener(
+        'resize',
+        verificarTela
+      )
+
+  }, [])
+
   function alterarQuantidade(
     cor: string,
     tamanho: number,
@@ -54,9 +88,13 @@ export default function NovoPedidoPage() {
     )
 
       .reduce(
-        (total: number, valor: any) =>
+        (
+          total: number,
+          valor: any
+        ) =>
 
-          total + Number(valor || 0),
+          total +
+          Number(valor || 0),
 
         0
       )
@@ -106,8 +144,6 @@ export default function NovoPedidoPage() {
 
       }
 
-      // BUSCAR CLIENTE
-
       const { data: cliente } =
 
         await supabase
@@ -133,8 +169,6 @@ export default function NovoPedidoPage() {
         return
 
       }
-
-      // CRIAR PEDIDO
 
       const {
         data: pedido,
@@ -174,8 +208,6 @@ export default function NovoPedidoPage() {
 
       }
 
-      // PREPARAR ITENS
-
       const itens = Object.entries(
         quantidades
       )
@@ -208,8 +240,6 @@ export default function NovoPedidoPage() {
           }
 
         })
-
-      // SALVAR ITENS
 
       const {
         error: erroItens
@@ -258,8 +288,11 @@ export default function NovoPedidoPage() {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#ffffff',
-        padding: '40px'
+        backgroundColor: '#f5f5f5',
+        padding:
+          mobile
+            ? '16px'
+            : '40px'
       }}
     >
 
@@ -273,8 +306,13 @@ export default function NovoPedidoPage() {
 
         <h1
           style={{
-            fontSize: '52px',
+            fontSize:
+              mobile
+                ? '38px'
+                : '52px',
+
             fontWeight: '800',
+
             color: '#111827'
           }}
         >
@@ -285,7 +323,10 @@ export default function NovoPedidoPage() {
           style={{
             marginTop: '10px',
             color: '#6b7280',
-            fontSize: '18px'
+            fontSize:
+              mobile
+                ? '16px'
+                : '18px'
           }}
         >
           Preencha as quantidades desejadas
@@ -293,74 +334,360 @@ export default function NovoPedidoPage() {
 
       </div>
 
-      {/* CARD */}
-
-      <div
-        style={{
-          backgroundColor: '#f9fafb',
-          borderRadius: '24px',
-          padding: '30px',
-          boxShadow:
-            '0 10px 30px rgba(0,0,0,0.05)'
-        }}
-      >
-
-        {/* TABELA */}
+      {mobile ? (
 
         <div
           style={{
-            overflowX: 'auto',
-            borderRadius: '18px',
-            border:
-              '1px solid #d1d5db'
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            paddingBottom: '140px'
           }}
         >
 
-          <table
+          {cores.map((cor) => {
+
+            const expandidoCor =
+              expandido[cor]
+
+            const listaTamanhos =
+
+              expandidoCor
+                ? tamanhos
+                : tamanhos.slice(0, 8)
+
+            return (
+
+              <div
+                key={cor}
+                style={{
+                  backgroundColor:
+                    '#ffffff',
+
+                  borderRadius:
+                    '24px',
+
+                  padding: '20px',
+
+                  border:
+                    '1px solid #e5e7eb',
+
+                  boxShadow:
+                    '0 4px 12px rgba(0,0,0,0.04)'
+                }}
+              >
+
+                <div
+                  style={{
+                    marginBottom: '20px'
+                  }}
+                >
+
+                  <h2
+                    style={{
+                      fontSize: '28px',
+                      fontWeight: '800',
+                      color: '#111827'
+                    }}
+                  >
+                    {cor}
+                  </h2>
+
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+
+                    gridTemplateColumns:
+                      'repeat(4, 1fr)',
+
+                    gap: '14px'
+                  }}
+                >
+
+                  {listaTamanhos.map(
+                    (tamanho) => (
+
+                      <div
+                        key={tamanho}
+                      >
+
+                        <div
+                          style={{
+                            textAlign:
+                              'center',
+
+                            fontWeight:
+                              '700',
+
+                            marginBottom:
+                              '8px',
+
+                            color:
+                              '#111827'
+                          }}
+                        >
+                          {tamanho}
+                        </div>
+
+                        <input
+                          type="number"
+
+                          min="0"
+
+                          value={
+                            quantidades[
+                              `${cor}-${tamanho}`
+                            ] || ''
+                          }
+
+                          onChange={(e) =>
+                            alterarQuantidade(
+                              cor,
+                              tamanho,
+                              e.target.value
+                            )
+                          }
+
+                          style={{
+                            width: '100%',
+
+                            height: '54px',
+
+                            border:
+                              '1px solid #d1d5db',
+
+                            borderRadius:
+                              '14px',
+
+                            textAlign:
+                              'center',
+
+                            fontSize:
+                              '22px',
+
+                            fontWeight:
+                              '700',
+
+                            color:
+                              '#111827',
+
+                            backgroundColor:
+                              '#ffffff',
+
+                            outline:
+                              'none'
+                          }}
+                        />
+
+                      </div>
+
+                    )
+                  )}
+
+                </div>
+
+                {!expandidoCor && (
+
+                  <button
+
+                    onClick={() =>
+
+                      setExpandido(
+                        (prev: any) => ({
+
+                          ...prev,
+
+                          [cor]: true
+
+                        })
+                      )
+
+                    }
+
+                    style={{
+                      width: '100%',
+
+                      marginTop: '18px',
+
+                      backgroundColor:
+                        '#f3f4f6',
+
+                      border: 'none',
+
+                      padding: '16px',
+
+                      borderRadius:
+                        '14px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#111827'
+                    }}
+                  >
+
+                    Ver mais tamanhos
+
+                  </button>
+
+                )}
+
+              </div>
+
+            )
+
+          })}
+
+          <div
             style={{
-              minWidth: '1700px',
-              borderCollapse: 'collapse',
+              position: 'fixed',
+
+              bottom: 0,
+
+              left: 0,
+
+              right: 0,
+
               backgroundColor:
-                '#ffffff'
+                '#ffffff',
+
+              padding: '20px',
+
+              display: 'flex',
+
+              justifyContent:
+                'space-between',
+
+              alignItems:
+                'center',
+
+              boxShadow:
+                '0 -4px 20px rgba(0,0,0,0.08)'
             }}
           >
 
-            <thead
+            <div>
+
+              <p
+                style={{
+                  color: '#6b7280',
+                  fontSize: '14px'
+                }}
+              >
+                Total de pares
+              </p>
+
+              <h2
+                style={{
+                  fontSize: '42px',
+                  fontWeight: '800',
+                  color: '#111827'
+                }}
+              >
+                {totalPares()}
+              </h2>
+
+            </div>
+
+            <button
+
+              onClick={enviarPedido}
+
+              disabled={salvando}
+
               style={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 20
+
+                backgroundColor:
+
+                  salvando
+                    ? '#9ca3af'
+                    : '#111827',
+
+                color: '#ffffff',
+
+                border: 'none',
+
+                borderRadius: '18px',
+
+                padding:
+                  '18px 30px',
+
+                fontSize: '20px',
+
+                fontWeight: '800',
+
+                cursor:
+                  salvando
+                    ? 'not-allowed'
+                    : 'pointer'
               }}
             >
 
-              <tr>
+              {salvando
+                ? 'Enviando...'
+                : 'Enviar Pedido'}
 
-                {/* COR FIXA */}
+            </button>
 
-                <th
-                  style={{
-                    position: 'sticky',
-                    left: 0,
-                    zIndex: 30,
+          </div>
 
-                    border:
-                      '1px solid #d1d5db',
+        </div>
 
-                    padding: '14px',
+      ) : (
 
-                    backgroundColor:
-                      '#111827',
+        <div
+          style={{
+            backgroundColor: '#f9fafb',
+            borderRadius: '24px',
+            padding: '30px',
+            boxShadow:
+              '0 10px 30px rgba(0,0,0,0.05)'
+          }}
+        >
 
-                    color: '#ffffff',
+          <div
+            style={{
+              overflowX: 'auto'
+            }}
+          >
 
-                    minWidth: '120px'
-                  }}
-                >
-                  Cor
-                </th>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse:
+                  'collapse',
 
-                {tamanhos.map(
-                  (tamanho) => (
+                backgroundColor:
+                  '#ffffff'
+              }}
+            >
+
+              <thead>
+
+                <tr>
+
+                  <th
+                    style={{
+                      border:
+                        '1px solid #d1d5db',
+
+                      padding: '14px',
+
+                      backgroundColor:
+                        '#111827',
+
+                      color: '#ffffff',
+
+                      minWidth: '120px'
+                    }}
+                  >
+                    Cor
+                  </th>
+
+                  {tamanhos.map((tamanho) => (
 
                     <th
                       key={tamanho}
@@ -381,17 +708,15 @@ export default function NovoPedidoPage() {
                       {tamanho}
                     </th>
 
-                  )
-                )}
+                  ))}
 
-              </tr>
+                </tr>
 
-            </thead>
+              </thead>
 
-            <tbody>
+              <tbody>
 
-              {cores.map(
-                (cor, index) => (
+                {cores.map((cor, index) => (
 
                   <tr
                     key={cor}
@@ -403,17 +728,8 @@ export default function NovoPedidoPage() {
                     }}
                   >
 
-                    {/* COR FIXA */}
-
                     <td
                       style={{
-                        position:
-                          'sticky',
-
-                        left: 0,
-
-                        zIndex: 10,
-
                         border:
                           '1px solid #d1d5db',
 
@@ -422,199 +738,186 @@ export default function NovoPedidoPage() {
                         fontWeight:
                           '700',
 
-                        color:
-                          '#111827',
+                        color: '#111827',
 
                         backgroundColor:
-                          '#f3f4f6',
-
-                        minWidth:
-                          '120px'
+                          '#f3f4f6'
                       }}
                     >
                       {cor}
                     </td>
 
-                    {tamanhos.map(
-                      (tamanho) => (
+                    {tamanhos.map((tamanho) => (
 
-                        <td
-                          key={tamanho}
+                      <td
+                        key={tamanho}
+                        style={{
+                          border:
+                            '1px solid #d1d5db',
+
+                          padding: '8px',
+
+                          textAlign:
+                            'center'
+                        }}
+                      >
+
+                        <input
+                          type="number"
+                          min="0"
+
+                          value={
+                            quantidades[
+                              `${cor}-${tamanho}`
+                            ] || ''
+                          }
+
+                          onChange={(e) =>
+                            alterarQuantidade(
+                              cor,
+                              tamanho,
+                              e.target.value
+                            )
+                          }
+
                           style={{
+
+                            width: '60px',
+
+                            padding: '10px',
+
                             border:
                               '1px solid #d1d5db',
 
-                            padding: '8px',
+                            borderRadius:
+                              '10px',
 
                             textAlign:
-                              'center'
+                              'center',
+
+                            fontSize:
+                              '16px',
+
+                            fontWeight:
+                              '600',
+
+                            color:
+                              '#111827',
+
+                            backgroundColor:
+                              '#ffffff',
+
+                            outline:
+                              'none'
                           }}
-                        >
+                        />
 
-                          <input
-                            type="number"
+                      </td>
 
-                            min="0"
-
-                            value={
-                              quantidades[
-                                `${cor}-${tamanho}`
-                              ] || ''
-                            }
-
-                            onChange={(e) =>
-                              alterarQuantidade(
-                                cor,
-                                tamanho,
-                                e.target.value
-                              )
-                            }
-
-                            style={{
-
-                              width: '60px',
-
-                              padding:
-                                '10px',
-
-                              border:
-                                '1px solid #d1d5db',
-
-                              borderRadius:
-                                '10px',
-
-                              textAlign:
-                                'center',
-
-                              fontSize:
-                                '16px',
-
-                              fontWeight:
-                                '600',
-
-                              color:
-                                '#111827',
-
-                              backgroundColor:
-                                '#ffffff',
-
-                              outline:
-                                'none'
-                            }}
-                          />
-
-                        </td>
-
-                      )
-                    )}
+                    ))}
 
                   </tr>
 
-                )
-              )}
+                ))}
 
-            </tbody>
+              </tbody>
 
-          </table>
-
-        </div>
-
-        {/* RODAPÉ */}
-
-        <div
-          style={{
-            marginTop: '30px',
-
-            display: 'flex',
-
-            justifyContent:
-              'space-between',
-
-            alignItems: 'center',
-
-            flexWrap: 'wrap',
-
-            gap: '20px'
-          }}
-        >
-
-          {/* TOTAL */}
-
-          <div>
-
-            <p
-              style={{
-                color: '#6b7280',
-                marginBottom: '8px'
-              }}
-            >
-              Total de pares
-            </p>
-
-            <h2
-              style={{
-                fontSize: '42px',
-                fontWeight: '800',
-                color: '#111827'
-              }}
-            >
-              {totalPares()}
-            </h2>
+            </table>
 
           </div>
 
-          {/* BOTÃO */}
-
-          <button
-
-            translate="no"
-
-            onClick={enviarPedido}
-
-            disabled={salvando}
-
+          <div
             style={{
+              marginTop: '30px',
 
-              backgroundColor:
+              display: 'flex',
 
-                salvando
-                  ? '#6b7280'
-                  : '#111827',
+              justifyContent:
+                'space-between',
 
-              color: '#ffffff',
+              alignItems: 'center',
 
-              padding:
-                '18px 34px',
+              flexWrap: 'wrap',
 
-              border: 'none',
-
-              borderRadius:
-                '18px',
-
-              fontWeight: '700',
-
-              fontSize: '20px',
-
-              cursor:
-                salvando
-                  ? 'not-allowed'
-                  : 'pointer',
-
-              minWidth: '220px'
+              gap: '20px'
             }}
           >
 
-            {
-              salvando
-                ? 'Enviando...'
-                : 'Enviar Pedido'
-            }
+            <div>
 
-          </button>
+              <p
+                style={{
+                  color: '#6b7280',
+                  marginBottom: '8px'
+                }}
+              >
+                Total de pares
+              </p>
+
+              <h2
+                style={{
+                  fontSize: '42px',
+                  fontWeight: '800',
+                  color: '#111827'
+                }}
+              >
+                {totalPares()}
+              </h2>
+
+            </div>
+
+            <button
+
+              onClick={enviarPedido}
+
+              disabled={salvando}
+
+              style={{
+
+                backgroundColor:
+
+                  salvando
+                    ? '#9ca3af'
+                    : '#111827',
+
+                color: '#ffffff',
+
+                padding:
+                  '16px 32px',
+
+                border: 'none',
+
+                borderRadius: '14px',
+
+                fontWeight: '700',
+
+                fontSize: '16px',
+
+                opacity:
+                  salvando ? 0.7 : 1,
+
+                cursor:
+
+                  salvando
+                    ? 'not-allowed'
+                    : 'pointer'
+
+              }}
+            >
+
+              {salvando
+
+                ? 'Enviando...'
+
+                : 'Enviar Pedido'}
+
+            </button>
+
+          </div>
 
         </div>
 
-      </div>
+      )}
 
     </div>
 
