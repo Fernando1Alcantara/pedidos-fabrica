@@ -276,6 +276,42 @@ export default function MeusPedidosPage() {
         }}
       >
 
+        {/* BOTÃO VOLTAR */}
+
+        <button
+
+          onClick={() =>
+            router.push('/cliente')
+          }
+
+          style={{
+
+            backgroundColor:
+              'transparent',
+
+            border: 'none',
+
+            color: '#111827',
+
+            fontSize:
+              mobile
+                ? '15px'
+                : '16px',
+
+            fontWeight: '700',
+
+            cursor: 'pointer',
+
+            marginBottom: '18px',
+
+            padding: 0
+          }}
+        >
+
+          ← Voltar para Home
+
+        </button>
+
         <h1
           style={{
             fontSize:
