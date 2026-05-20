@@ -1,14 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import {
+  useEffect,
+  useState
+} from 'react'
 
 import Link from 'next/link'
 
-import { useRouter } from 'next/navigation'
+import {
+  useRouter
+} from 'next/navigation'
 
-import { supabase } from '@/lib/supabase'
+import {
+  supabase
+} from '@/lib/supabase'
 
-import { formatarData } from '@/lib/data'
+import {
+  formatarData
+} from '@/lib/data'
 
 export default function MeusPedidosPage() {
 
@@ -20,20 +29,44 @@ export default function MeusPedidosPage() {
   const [loading, setLoading] =
     useState(true)
 
+  const [mobile, setMobile] =
+    useState(false)
+
   useEffect(() => {
 
     carregarPedidos()
+
+    function verificarTela() {
+
+      setMobile(
+        window.innerWidth < 768
+      )
+
+    }
+
+    verificarTela()
+
+    window.addEventListener(
+      'resize',
+      verificarTela
+    )
+
+    return () =>
+      window.removeEventListener(
+        'resize',
+        verificarTela
+      )
 
   }, [])
 
   async function carregarPedidos() {
 
-    // USUÁRIO LOGADO
-
     const {
       data: { user }
-    } = await supabase.auth
-      .getUser()
+    } =
+
+      await supabase.auth
+        .getUser()
 
     if (!user) {
 
@@ -43,17 +76,17 @@ export default function MeusPedidosPage() {
 
     }
 
-    // BUSCAR CLIENTE
-
     const { data: cliente } =
 
       await supabase
         .from('clientes')
         .select('*')
+
         .eq(
           'email',
           user.email?.toLowerCase()
         )
+
         .single()
 
     if (!cliente) {
@@ -68,16 +101,15 @@ export default function MeusPedidosPage() {
 
     }
 
-    // BUSCAR PEDIDOS
-
     const { data, error } =
 
       await supabase
         .from('pedidos')
+
         .select(`
           *,
-          clientes (
-            nome
+          itens_pedido (
+            quantidade
           )
         `)
 
@@ -107,25 +139,39 @@ export default function MeusPedidosPage() {
 
   }
 
-  function corStatus(status: string) {
+  function statusConfig(
+    status: string
+  ) {
 
     if (status === 'Recebido') {
 
       return {
 
-        fundo: '#fef3c7',
-        texto: '#92400e'
+        fundo:
+          '#fef3c7',
+
+        texto:
+          '#92400e',
+
+        borda:
+          '#fde68a'
 
       }
 
     }
 
-    if (status === 'Impresso') {
+    if (status === 'Produção') {
 
       return {
 
-        fundo: '#dbeafe',
-        texto: '#1e40af'
+        fundo:
+          '#dbeafe',
+
+        texto:
+          '#1d4ed8',
+
+        borda:
+          '#93c5fd'
 
       }
 
@@ -133,14 +179,43 @@ export default function MeusPedidosPage() {
 
     return {
 
-      fundo: '#dcfce7',
-      texto: '#166534'
+      fundo:
+        '#dcfce7',
+
+      texto:
+        '#166534',
+
+      borda:
+        '#86efac'
 
     }
 
   }
 
-  // LOADING
+  function totalPares(
+    pedido: any
+  ) {
+
+    return (
+      pedido.itens_pedido || []
+    )
+
+      .reduce(
+
+        (
+          total: number,
+          item: any
+        ) =>
+
+          total +
+          Number(
+            item.quantidade || 0
+          ),
+
+        0
+      )
+
+  }
 
   if (loading) {
 
@@ -148,11 +223,26 @@ export default function MeusPedidosPage() {
 
       <div
         style={{
-          padding: '40px',
-          fontSize: '22px'
+          minHeight: '100vh',
+          backgroundColor:
+            '#f3f4f6',
+
+          display: 'flex',
+
+          justifyContent:
+            'center',
+
+          alignItems:
+            'center',
+
+          fontSize: '22px',
+
+          color: '#6b7280'
         }}
       >
+
         Carregando pedidos...
+
       </div>
 
     )
@@ -164,8 +254,14 @@ export default function MeusPedidosPage() {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#f3f4f6',
-        padding: '40px'
+
+        backgroundColor:
+          '#f3f4f6',
+
+        padding:
+          mobile
+            ? '20px'
+            : '40px'
       }}
     >
 
@@ -173,28 +269,45 @@ export default function MeusPedidosPage() {
 
       <div
         style={{
-          marginBottom: '40px'
+          marginBottom:
+            mobile
+              ? '28px'
+              : '40px'
         }}
       >
 
         <h1
           style={{
-            fontSize: '52px',
+            fontSize:
+              mobile
+                ? '42px'
+                : '52px',
+
             fontWeight: '800',
-            color: '#000'
+
+            color: '#111827',
+
+            marginBottom: '10px'
           }}
         >
+
           Meus Pedidos
+
         </h1>
 
         <p
           style={{
             color: '#6b7280',
-            marginTop: '10px',
-            fontSize: '18px'
+
+            fontSize:
+              mobile
+                ? '16px'
+                : '18px'
           }}
         >
-          Acompanhe seus pedidos
+
+          Acompanhe seus pedidos em tempo real
+
         </p>
 
       </div>
@@ -205,15 +318,35 @@ export default function MeusPedidosPage() {
 
         <div
           style={{
-            backgroundColor: '#ffffff',
-            padding: '40px',
-            borderRadius: '24px',
-            textAlign: 'center',
-            color: '#6b7280',
-            fontSize: '20px'
+            backgroundColor:
+              '#ffffff',
+
+            borderRadius:
+              '24px',
+
+            padding:
+              mobile
+                ? '30px'
+                : '40px',
+
+            textAlign:
+              'center',
+
+            color:
+              '#6b7280',
+
+            fontSize:
+              mobile
+                ? '18px'
+                : '20px',
+
+            border:
+              '1px solid #e5e7eb'
           }}
         >
+
           Nenhum pedido encontrado
+
         </div>
 
       )}
@@ -223,15 +356,21 @@ export default function MeusPedidosPage() {
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          gap: '24px'
+
+          flexDirection:
+            'column',
+
+          gap:
+            mobile
+              ? '18px'
+              : '22px'
         }}
       >
 
         {pedidos.map((pedido) => {
 
-          const cores =
-            corStatus(
+          const status =
+            statusConfig(
               pedido.status
             )
 
@@ -239,106 +378,425 @@ export default function MeusPedidosPage() {
 
             <div
               key={pedido.id}
+
               style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '24px',
-                padding: '30px',
-                display: 'flex',
-                justifyContent:
-                  'space-between',
-                alignItems: 'center',
+
+                backgroundColor:
+                  '#ffffff',
+
+                borderRadius:
+                  '24px',
+
+                padding:
+                  mobile
+                    ? '22px'
+                    : '28px',
+
+                border:
+                  '1px solid #e5e7eb',
+
                 boxShadow:
-                  '0 10px 30px rgba(0,0,0,0.05)'
+                  '0 4px 16px rgba(0,0,0,0.04)',
+
+                transition:
+                  '0.2s'
               }}
             >
 
-              {/* ESQUERDA */}
+              {/* TOPO CARD */}
 
-              <div>
+              <div
+                style={{
 
-                <p
+                  display: 'flex',
+
+                  justifyContent:
+                    'space-between',
+
+                  alignItems:
+                    mobile
+                      ? 'flex-start'
+                      : 'center',
+
+                  flexDirection:
+                    mobile
+                      ? 'column'
+                      : 'row',
+
+                  gap:
+                    mobile
+                      ? '18px'
+                      : '12px'
+                }}
+              >
+
+                {/* ESQUERDA */}
+
+                <div>
+
+                  <p
+                    style={{
+                      color:
+                        '#6b7280',
+
+                      fontSize:
+                        '14px',
+
+                      marginBottom:
+                        '8px'
+                    }}
+                  >
+
+                    Pedido
+
+                  </p>
+
+                  <h2
+                    style={{
+
+                      fontSize:
+                        mobile
+                          ? '32px'
+                          : '34px',
+
+                      fontWeight:
+                        '800',
+
+                      color:
+                        '#111827',
+
+                      marginBottom:
+                        '10px'
+                    }}
+                  >
+
+                    #
+                    {pedido.id.slice(0, 8)}
+
+                  </h2>
+
+                  <div
+                    style={{
+
+                      display: 'flex',
+
+                      gap: '12px',
+
+                      flexWrap:
+                        'wrap',
+
+                      alignItems:
+                        'center'
+                    }}
+                  >
+
+                    <span
+                      style={{
+                        color:
+                          '#6b7280',
+
+                        fontSize:
+                          '15px'
+                      }}
+                    >
+
+                      {formatarData(
+                        pedido.created_at
+                      )}
+
+                    </span>
+
+                    <span
+                      style={{
+                        color:
+                          '#9ca3af'
+                      }}
+                    >
+
+                      •
+
+                    </span>
+
+                    <span
+                      style={{
+
+                        fontWeight:
+                          '700',
+
+                        color:
+                          '#111827',
+
+                        fontSize:
+                          '15px'
+                      }}
+                    >
+
+                      {totalPares(
+                        pedido
+                      )}{' '}
+
+                      pares
+
+                    </span>
+
+                  </div>
+
+                </div>
+
+                {/* STATUS */}
+
+                <div
                   style={{
-                    color: '#6b7280',
-                    marginBottom: '6px'
-                  }}
-                >
-                  Pedido
-                </p>
 
-                <h2
-                  style={{
-                    fontSize: '32px',
-                    fontWeight: '800',
-                    color: '#111827'
-                  }}
-                >
-                  #
-                  {pedido.id.slice(0, 8)}
-                </h2>
-
-                <p
-                  style={{
-                    color: '#6b7280',
-                    marginTop: '10px'
-                  }}
-                >
-                  {formatarData(
-                    pedido.created_at
-                  )}
-                </p>
-
-              </div>
-
-              {/* STATUS */}
-
-              <div>
-
-                <span
-                  style={{
                     backgroundColor:
-                      cores.fundo,
+                      status.fundo,
 
                     color:
-                      cores.texto,
+                      status.texto,
+
+                    border:
+                      `1px solid ${status.borda}`,
 
                     padding:
-                      '12px 20px',
+                      '10px 18px',
 
                     borderRadius:
                       '999px',
 
-                    fontWeight: '700'
+                    fontWeight:
+                      '700',
+
+                    fontSize:
+                      '14px',
+
+                    display: 'flex',
+
+                    alignItems:
+                      'center',
+
+                    gap: '8px'
                   }}
                 >
+
+                  <div
+                    style={{
+
+                      width: '8px',
+
+                      height: '8px',
+
+                      borderRadius:
+                        '999px',
+
+                      backgroundColor:
+                        status.texto
+                    }}
+                  />
+
                   {pedido.status}
-                </span>
+
+                </div>
 
               </div>
 
-              {/* BOTÃO */}
+              {/* LINHA */}
 
-              <Link
-                href={`/meus-pedidos/${pedido.id}`}
+              <div
                 style={{
+                  height: '1px',
+
                   backgroundColor:
-                    '#2563eb',
+                    '#f3f4f6',
 
-                  color: '#ffffff',
+                  margin:
+                    '22px 0'
+                }}
+              />
 
-                  padding:
-                    '16px 28px',
+              {/* RODAPÉ */}
 
-                  borderRadius:
-                    '16px',
+              <div
+                style={{
 
-                  fontWeight: '700',
+                  display: 'flex',
 
-                  textDecoration:
-                    'none'
+                  justifyContent:
+                    'space-between',
+
+                  alignItems:
+                    mobile
+                      ? 'stretch'
+                      : 'center',
+
+                  flexDirection:
+                    mobile
+                      ? 'column'
+                      : 'row',
+
+                  gap:
+                    mobile
+                      ? '16px'
+                      : '10px'
                 }}
               >
-                Ver Pedido
-              </Link>
+
+                {/* ETAPAS */}
+
+                <div
+                  style={{
+
+                    display: 'flex',
+
+                    alignItems:
+                      'center',
+
+                    gap:
+                      mobile
+                        ? '8px'
+                        : '12px',
+
+                    flexWrap:
+                      'wrap'
+                  }}
+                >
+
+                  <span
+                    style={{
+                      fontSize:
+                        '14px',
+
+                      color:
+                        pedido.status ===
+                        'Recebido'
+
+                          ? '#111827'
+
+                          : '#9ca3af',
+
+                      fontWeight:
+                        '700'
+                    }}
+                  >
+
+                    Recebido
+
+                  </span>
+
+                  <div
+                    style={{
+                      width: '22px',
+                      height: '2px',
+                      backgroundColor:
+                        '#d1d5db'
+                    }}
+                  />
+
+                  <span
+                    style={{
+                      fontSize:
+                        '14px',
+
+                      color:
+                        pedido.status ===
+                        'Produção'
+
+                          ? '#111827'
+
+                          : '#9ca3af',
+
+                      fontWeight:
+                        '700'
+                    }}
+                  >
+
+                    Produção
+
+                  </span>
+
+                  <div
+                    style={{
+                      width: '22px',
+                      height: '2px',
+                      backgroundColor:
+                        '#d1d5db'
+                    }}
+                  />
+
+                  <span
+                    style={{
+                      fontSize:
+                        '14px',
+
+                      color:
+                        pedido.status ===
+                        'Finalizado'
+
+                          ? '#111827'
+
+                          : '#9ca3af',
+
+                      fontWeight:
+                        '700'
+                    }}
+                  >
+
+                    Finalizado
+
+                  </span>
+
+                </div>
+
+                {/* BOTÃO */}
+
+                <Link
+
+                  href={`/meus-pedidos/${pedido.id}`}
+
+                  style={{
+
+                    backgroundColor:
+                      '#111827',
+
+                    color:
+                      '#ffffff',
+
+                    padding:
+                      mobile
+                        ? '16px'
+                        : '14px 22px',
+
+                    borderRadius:
+                      '14px',
+
+                    fontWeight:
+                      '700',
+
+                    textDecoration:
+                      'none',
+
+                    display: 'flex',
+
+                    justifyContent:
+                      'center',
+
+                    alignItems:
+                      'center',
+
+                    minWidth:
+                      mobile
+                        ? '100%'
+                        : '160px',
+
+                    fontSize:
+                      '15px'
+                  }}
+                >
+
+                  Detalhes →
+
+                </Link>
+
+              </div>
 
             </div>
 
