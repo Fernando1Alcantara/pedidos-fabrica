@@ -9,6 +9,12 @@ export default function ClientePage() {
   const router = useRouter()
   const [emailCliente, setEmailCliente] = useState('')
   const [nomeCliente, setNomeCliente] = useState('')
+  const [stats, setStats] = useState({
+    totalMes: 0,
+    emAndamento: 0,
+    entregues: 0,
+  })
+  const [loadingStats, setLoadingStats] = useState(true)
 
   useEffect(() => {
     verificarUsuario()
@@ -20,15 +26,64 @@ export default function ClientePage() {
       router.push('/login')
       return
     }
+
+    // VERIFICAR SE É CLIENTE
+    const { data: clienteInfo } = await supabase
+      .from('clientes')
+      .select('id, tipo')
+      .eq('email', user.email?.toLowerCase())
+      .single()
+
+    if (!clienteInfo) {
+      router.push('/login')
+      return
+    }
+
+    if (clienteInfo.tipo === 'industria') {
+      router.push('/industria')
+      return
+    }
+
+    // FORMATAR NOME A PARTIR DO EMAIL
     const email = user.email || ''
     setEmailCliente(email)
-
-    // Gera iniciais e nome amigável a partir do email
     const parteNome = email.split('@')[0]
     const nomeFormatado = parteNome
       .replace(/[._]/g, ' ')
       .replace(/\b\w/g, (c) => c.toUpperCase())
     setNomeCliente(nomeFormatado)
+
+    // CARREGAR STATS DO CLIENTE
+    await carregarStats(clienteInfo.id)
+  }
+
+  async function carregarStats(clienteId: string) {
+    // INÍCIO DO MÊS ATUAL
+    const agora = new Date()
+    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
+      .toISOString()
+
+    // TODOS OS PEDIDOS DO MÊS
+    const { data: pedidosMes } = await supabase
+      .from('pedidos')
+      .select('id, status')
+      .eq('cliente_id', clienteId)
+      .gte('created_at', inicioMes)
+
+    const totalMes = (pedidosMes || []).length
+
+    // EM ANDAMENTO = Recebido ou Produção
+    const emAndamento = (pedidosMes || []).filter(
+      (p) => p.status === 'Recebido' || p.status === 'Produção'
+    ).length
+
+    // FINALIZADOS DO MÊS
+    const entregues = (pedidosMes || []).filter(
+      (p) => p.status === 'Finalizado'
+    ).length
+
+    setStats({ totalMes, emAndamento, entregues })
+    setLoadingStats(false)
   }
 
   function gerarIniciais(nome: string) {
@@ -58,7 +113,6 @@ export default function ClientePage() {
         top: 0,
         zIndex: 10,
       }}>
-        {/* Logo / Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '32px', height: '32px',
@@ -74,7 +128,6 @@ export default function ClientePage() {
           </span>
         </div>
 
-        {/* Usuário + Sair */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#111', lineHeight: 1.3 }}>
@@ -85,7 +138,6 @@ export default function ClientePage() {
             </div>
           </div>
 
-          {/* Avatar com iniciais */}
           <div style={{
             width: '36px', height: '36px',
             borderRadius: '50%',
@@ -120,7 +172,7 @@ export default function ClientePage() {
       {/* CONTEÚDO */}
       <main style={{ padding: '2rem', maxWidth: '860px', margin: '0 auto' }}>
 
-        {/* Saudação */}
+        {/* SAUDAÇÃO */}
         <div style={{ marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#111', margin: 0 }}>
@@ -149,33 +201,24 @@ export default function ClientePage() {
           gap: '16px',
           marginBottom: '2rem',
         }}>
-
-          {/* Fazer Pedido */}
           <Link href="/novo-pedido" style={{ textDecoration: 'none' }}>
-            <div style={{
-              backgroundColor: '#ffffff',
-              border: '0.5px solid rgba(0,0,0,0.1)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s',
-              height: '100%',
-            }}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                border: '0.5px solid rgba(0,0,0,0.1)',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                display: 'flex', flexDirection: 'column', gap: '12px',
+                cursor: 'pointer', transition: 'border-color 0.15s', height: '100%',
+              }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = '#378ADD')}
               onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)')}
             >
               <div style={{
-                width: '44px', height: '44px',
-                borderRadius: '10px',
+                width: '44px', height: '44px', borderRadius: '10px',
                 backgroundColor: '#EBF4FF',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '22px',
-              }}>
-                🛒
-              </div>
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px',
+              }}>🛒</div>
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>
                   Fazer pedido
@@ -184,43 +227,30 @@ export default function ClientePage() {
                   Crie e envie novos pedidos para a fábrica
                 </div>
               </div>
-              <div style={{
-                marginTop: 'auto',
-                fontSize: '12px',
-                color: '#185FA5',
-                display: 'flex', alignItems: 'center', gap: '4px',
-              }}>
+              <div style={{ marginTop: 'auto', fontSize: '12px', color: '#185FA5' }}>
                 Acessar →
               </div>
             </div>
           </Link>
 
-          {/* Meus Pedidos */}
           <Link href="/meus-pedidos" style={{ textDecoration: 'none' }}>
-            <div style={{
-              backgroundColor: '#ffffff',
-              border: '0.5px solid rgba(0,0,0,0.1)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s',
-              height: '100%',
-            }}
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                border: '0.5px solid rgba(0,0,0,0.1)',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                display: 'flex', flexDirection: 'column', gap: '12px',
+                cursor: 'pointer', transition: 'border-color 0.15s', height: '100%',
+              }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = '#1D9E75')}
               onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)')}
             >
               <div style={{
-                width: '44px', height: '44px',
-                borderRadius: '10px',
+                width: '44px', height: '44px', borderRadius: '10px',
                 backgroundColor: '#E1F5EE',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '22px',
-              }}>
-                📦
-              </div>
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px',
+              }}>📦</div>
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>
                   Meus pedidos
@@ -229,36 +259,29 @@ export default function ClientePage() {
                   Acompanhe o status de todos os seus pedidos
                 </div>
               </div>
-              <div style={{
-                marginTop: 'auto',
-                fontSize: '12px',
-                color: '#0F6E56',
-                display: 'flex', alignItems: 'center', gap: '4px',
-              }}>
+              <div style={{ marginTop: 'auto', fontSize: '12px', color: '#0F6E56' }}>
                 Acessar →
               </div>
             </div>
           </Link>
         </div>
 
-        {/* Divisor */}
+        {/* DIVISOR */}
         <div style={{ height: '0.5px', backgroundColor: 'rgba(0,0,0,0.08)', marginBottom: '1.5rem' }} />
 
-        {/* Mini stats */}
+        {/* STATS REAIS */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
           gap: '12px',
         }}>
           {[
-            { label: 'Pedidos este mês', valor: '—' },
-            { label: 'Em andamento', valor: '—' },
-            { label: 'Entregues', valor: '—' },
+            { label: 'Pedidos este mês', valor: loadingStats ? '...' : stats.totalMes },
+            { label: 'Em andamento', valor: loadingStats ? '...' : stats.emAndamento },
+            { label: 'Finalizados', valor: loadingStats ? '...' : stats.entregues },
           ].map((stat) => (
             <div key={stat.label} style={{
-              backgroundColor: '#eeeee9',
-              borderRadius: '8px',
-              padding: '1rem',
+              backgroundColor: '#eeeee9', borderRadius: '8px', padding: '1rem',
             }}>
               <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>
                 {stat.label}
@@ -269,6 +292,7 @@ export default function ClientePage() {
             </div>
           ))}
         </div>
+
       </main>
     </div>
   )

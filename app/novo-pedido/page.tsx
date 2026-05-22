@@ -1,926 +1,326 @@
 'use client'
 
-import {
-  useEffect,
-  useState
-} from 'react'
-
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-
 import { supabase } from '@/lib/supabase'
 
 export default function NovoPedidoPage() {
-
   const router = useRouter()
 
-  const cores = [
-    'Branco',
-    'Preto',
-    'Bege',
-    'Dourado',
-    'Rosa',
-    'Pink'
-  ]
+  const cores = ['Branco', 'Preto', 'Bege', 'Dourado', 'Rosa', 'Pink']
+  const tamanhos = Array.from({ length: 21 }, (_, i) => i + 16)
 
-  const tamanhos = Array.from(
-    { length: 21 },
-    (_, i) => i + 16
-  )
-
-  const [quantidades, setQuantidades] =
-    useState<any>({})
-
-  const [salvando, setSalvando] =
-    useState(false)
-
-  const [mobile, setMobile] =
-    useState(false)
-
-  const [expandido, setExpandido] =
-    useState<any>({})
+  const [quantidades, setQuantidades] = useState<any>({})
+  const [salvando, setSalvando] = useState(false)
+  const [mobile, setMobile] = useState(false)
+  const [expandido, setExpandido] = useState<any>({})
+  const [clienteId, setClienteId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-
     function verificarTela() {
-
-      setMobile(
-        window.innerWidth < 768
-      )
-
+      setMobile(window.innerWidth < 768)
     }
-
     verificarTela()
-
-    window.addEventListener(
-      'resize',
-      verificarTela
-    )
-
-    return () =>
-      window.removeEventListener(
-        'resize',
-        verificarTela
-      )
-
+    window.addEventListener('resize', verificarTela)
+    return () => window.removeEventListener('resize', verificarTela)
   }, [])
 
-  function alterarQuantidade(
-    cor: string,
-    tamanho: number,
-    valor: string
-  ) {
+  useEffect(() => {
+    verificarAcesso()
+  }, [])
 
+  async function verificarAcesso() {
+    // 1. VERIFICAR SE ESTÁ LOGADO
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    // 2. VERIFICAR SE É CLIENTE
+    const { data: clienteInfo } = await supabase
+      .from('clientes')
+      .select('id, tipo')
+      .eq('email', user.email?.toLowerCase())
+      .single()
+
+    if (!clienteInfo) {
+      router.push('/login')
+      return
+    }
+
+    if (clienteInfo.tipo === 'industria') {
+      router.push('/industria')
+      return
+    }
+
+    // 3. GUARDAR ID DO CLIENTE PARA USAR NO ENVIO
+    setClienteId(clienteInfo.id)
+    setLoading(false)
+  }
+
+  function alterarQuantidade(cor: string, tamanho: number, valor: string) {
     setQuantidades((prev: any) => ({
-
       ...prev,
-
-      [`${cor}-${tamanho}`]:
-        valor
-
+      [`${cor}-${tamanho}`]: valor,
     }))
-
   }
 
   function totalPares() {
-
-    return Object.values(
-      quantidades
-    )
-
-      .reduce(
-        (
-          total: number,
-          valor: any
-        ) =>
-
-          total +
-          Number(valor || 0),
-
-        0
-      )
-
+    return Object.values(quantidades).reduce(
+      (total: number, valor: any) => total + Number(valor || 0), 0
+    ) as number
   }
 
   async function enviarPedido() {
+    if (salvando) return
 
-    if (salvando) {
+    if (totalPares() <= 0) {
+      alert('Adicione ao menos 1 item')
       return
     }
 
-    const total =
-      totalPares()
-
-    if (total <= 0) {
-
-      alert(
-        'Adicione ao menos 1 item'
-      )
-
+    if (!clienteId) {
+      alert('Erro: cliente não identificado')
       return
-
     }
 
     setSalvando(true)
 
     try {
-
-      const {
-        data: { user }
-      } =
-
-        await supabase
-          .auth
-          .getUser()
-
-      if (!user) {
-
-        alert(
-          'Usuário não logado'
-        )
-
-        setSalvando(false)
-
-        return
-
-      }
-
-      const { data: cliente } =
-
-        await supabase
-          .from('clientes')
-          .select('*')
-
-          .eq(
-            'email',
-            user.email
-              ?.toLowerCase()
-          )
-
-          .single()
-
-      if (!cliente) {
-
-        alert(
-          'Cliente não encontrado'
-        )
-
-        setSalvando(false)
-
-        return
-
-      }
-
-      const {
-        data: pedido,
-        error
-      } =
-
-        await supabase
-          .from('pedidos')
-          .insert({
-
-            cliente_id:
-              cliente.id,
-
-            status:
-              'Recebido',
-
-            consolidado_impresso:
-              false
-
-          })
-
-          .select()
-
-          .single()
+      // CRIAR PEDIDO
+      const { data: pedido, error } = await supabase
+        .from('pedidos')
+        .insert({
+          cliente_id: clienteId,
+          status: 'Recebido',
+          consolidado_impresso: false,
+        })
+        .select()
+        .single()
 
       if (error || !pedido) {
-
-        console.log(error)
-
-        alert(
-          'Erro ao criar pedido'
-        )
-
+        alert('Erro ao criar pedido')
         setSalvando(false)
-
         return
-
       }
 
-      const itens = Object.entries(
-        quantidades
-      )
-
-        .filter(
-          ([_, valor]) =>
-            Number(valor) > 0
-        )
-
+      // CRIAR ITENS
+      const itens = Object.entries(quantidades)
+        .filter(([_, valor]) => Number(valor) > 0)
         .map(([chave, valor]) => {
-
-          const [
-            cor,
-            tamanho
-          ] = chave.split('-')
-
+          const [cor, tamanho] = chave.split('-')
           return {
-
-            pedido_id:
-              pedido.id,
-
+            pedido_id: pedido.id,
             cor,
-
-            tamanho:
-              Number(tamanho),
-
-            quantidade:
-              Number(valor)
-
+            tamanho: Number(tamanho),
+            quantidade: Number(valor),
           }
-
         })
 
-      const {
-        error: erroItens
-      } =
-
-        await supabase
-          .from('itens_pedido')
-          .insert(itens)
+      const { error: erroItens } = await supabase
+        .from('itens_pedido')
+        .insert(itens)
 
       if (erroItens) {
-
-        console.log(erroItens)
-
-        alert(
-          'Erro ao salvar itens'
-        )
-
+        alert('Erro ao salvar itens')
         setSalvando(false)
-
         return
-
       }
 
-      router.push(
-        '/meus-pedidos'
-      )
-
-    }
-
-    catch (erro) {
-
-      console.log(erro)
-
-      alert(
-        'Erro inesperado'
-      )
-
+      router.push('/meus-pedidos')
+    } catch (erro) {
+      console.error(erro)
+      alert('Erro inesperado')
     }
 
     setSalvando(false)
+  }
 
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', backgroundColor: '#f5f5f3',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'sans-serif', color: '#888', fontSize: '15px',
+      }}>
+        Carregando...
+      </div>
+    )
   }
 
   return (
+    <div style={{
+      minHeight: '100vh', backgroundColor: '#f5f5f3', fontFamily: 'sans-serif',
+      padding: mobile ? '1rem' : '2rem',
+    }}>
 
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: '#f5f5f5',
-        padding:
-          mobile
-            ? '16px'
-            : '40px'
-      }}
-    >
-
-      {/* TOPO */}
-
-      <div
-        style={{
-          marginBottom: '30px'
-        }}
-      >
-
-        <h1
+      {/* HEADER */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <button
+          onClick={() => router.push('/cliente')}
           style={{
-            fontSize:
-              mobile
-                ? '38px'
-                : '52px',
-
-            fontWeight: '800',
-
-            color: '#111827'
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: '13px', color: '#185FA5', padding: 0, marginBottom: '12px',
+            display: 'flex', alignItems: 'center', gap: '4px',
           }}
         >
-          Novo Pedido
+          ← Voltar
+        </button>
+        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#111', margin: 0 }}>
+          Novo pedido
         </h1>
-
-        <p
-          style={{
-            marginTop: '10px',
-            color: '#6b7280',
-            fontSize:
-              mobile
-                ? '16px'
-                : '18px'
-          }}
-        >
+        <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
           Preencha as quantidades desejadas
         </p>
-
       </div>
 
+      {/* MOBILE */}
       {mobile ? (
-
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            paddingBottom: '140px'
-          }}
-        >
-
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '120px' }}>
           {cores.map((cor) => {
-
-            const expandidoCor =
-              expandido[cor]
-
-            const listaTamanhos =
-
-              expandidoCor
-                ? tamanhos
-                : tamanhos.slice(0, 8)
+            const expandidoCor = expandido[cor]
+            const listaTamanhos = expandidoCor ? tamanhos : tamanhos.slice(0, 8)
 
             return (
-
-              <div
-                key={cor}
-                style={{
-                  backgroundColor:
-                    '#ffffff',
-
-                  borderRadius:
-                    '24px',
-
-                  padding: '20px',
-
-                  border:
-                    '1px solid #e5e7eb',
-
-                  boxShadow:
-                    '0 4px 12px rgba(0,0,0,0.04)'
-                }}
-              >
-
-                <div
-                  style={{
-                    marginBottom: '20px'
-                  }}
-                >
-
-                  <h2
-                    style={{
-                      fontSize: '28px',
-                      fontWeight: '800',
-                      color: '#111827'
-                    }}
-                  >
-                    {cor}
-                  </h2>
-
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-
-                    gridTemplateColumns:
-                      'repeat(4, 1fr)',
-
-                    gap: '14px'
-                  }}
-                >
-
-                  {listaTamanhos.map(
-                    (tamanho) => (
-
-                      <div
-                        key={tamanho}
-                      >
-
-                        <div
-                          style={{
-                            textAlign:
-                              'center',
-
-                            fontWeight:
-                              '700',
-
-                            marginBottom:
-                              '8px',
-
-                            color:
-                              '#111827'
-                          }}
-                        >
-                          {tamanho}
-                        </div>
-
-                        <input
-                          type="number"
-
-                          min="0"
-
-                          value={
-                            quantidades[
-                              `${cor}-${tamanho}`
-                            ] || ''
-                          }
-
-                          onChange={(e) =>
-                            alterarQuantidade(
-                              cor,
-                              tamanho,
-                              e.target.value
-                            )
-                          }
-
-                          style={{
-                            width: '100%',
-
-                            height: '54px',
-
-                            border:
-                              '1px solid #d1d5db',
-
-                            borderRadius:
-                              '14px',
-
-                            textAlign:
-                              'center',
-
-                            fontSize:
-                              '22px',
-
-                            fontWeight:
-                              '700',
-
-                            color:
-                              '#111827',
-
-                            backgroundColor:
-                              '#ffffff',
-
-                            outline:
-                              'none'
-                          }}
-                        />
-
+              <div key={cor} style={{
+                backgroundColor: '#fff', borderRadius: '12px',
+                border: '0.5px solid rgba(0,0,0,0.1)', padding: '1rem',
+              }}>
+                <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111', marginBottom: '12px' }}>
+                  {cor}
+                </h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                  {listaTamanhos.map((tamanho) => (
+                    <div key={tamanho}>
+                      <div style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '4px' }}>
+                        {tamanho}
                       </div>
-
-                    )
-                  )}
-
+                      <input
+                        type="number" min="0"
+                        value={quantidades[`${cor}-${tamanho}`] || ''}
+                        onChange={(e) => alterarQuantidade(cor, tamanho, e.target.value)}
+                        style={{
+                          width: '100%', height: '44px', border: '0.5px solid rgba(0,0,0,0.2)',
+                          borderRadius: '8px', textAlign: 'center', fontSize: '16px',
+                          fontWeight: 500, color: '#111', backgroundColor: '#fff', outline: 'none',
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
-
                 {!expandidoCor && (
-
                   <button
-
-                    onClick={() =>
-
-                      setExpandido(
-                        (prev: any) => ({
-
-                          ...prev,
-
-                          [cor]: true
-
-                        })
-                      )
-
-                    }
-
+                    onClick={() => setExpandido((prev: any) => ({ ...prev, [cor]: true }))}
                     style={{
-                      width: '100%',
-
-                      marginTop: '18px',
-
-                      backgroundColor:
-                        '#f3f4f6',
-
-                      border: 'none',
-
-                      padding: '16px',
-
-                      borderRadius:
-                        '14px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#111827'
+                      width: '100%', marginTop: '12px', backgroundColor: '#f5f5f3',
+                      border: 'none', padding: '10px', borderRadius: '8px',
+                      fontSize: '13px', fontWeight: 500, color: '#555', cursor: 'pointer',
                     }}
                   >
-
                     Ver mais tamanhos
-
                   </button>
-
                 )}
-
               </div>
-
             )
-
           })}
 
-          <div
-            style={{
-              position: 'fixed',
-
-              bottom: 0,
-
-              left: 0,
-
-              right: 0,
-
-              backgroundColor:
-                '#ffffff',
-
-              padding: '20px',
-
-              display: 'flex',
-
-              justifyContent:
-                'space-between',
-
-              alignItems:
-                'center',
-
-              boxShadow:
-                '0 -4px 20px rgba(0,0,0,0.08)'
-            }}
-          >
-
+          {/* RODAPÉ FIXO MOBILE */}
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0,
+            backgroundColor: '#fff', padding: '1rem 1.25rem',
+            borderTop: '0.5px solid rgba(0,0,0,0.1)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+          }}>
             <div>
-
-              <p
-                style={{
-                  color: '#6b7280',
-                  fontSize: '14px'
-                }}
-              >
-                Total de pares
-              </p>
-
-              <h2
-                style={{
-                  fontSize: '42px',
-                  fontWeight: '800',
-                  color: '#111827'
-                }}
-              >
-                {totalPares()}
-              </h2>
-
+              <div style={{ fontSize: '12px', color: '#888' }}>Total de pares</div>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#111' }}>{totalPares()}</div>
             </div>
-
             <button
-
               onClick={enviarPedido}
-
               disabled={salvando}
-
               style={{
-
-                backgroundColor:
-
-                  salvando
-                    ? '#9ca3af'
-                    : '#111827',
-
-                color: '#ffffff',
-
-                border: 'none',
-
-                borderRadius: '18px',
-
-                padding:
-                  '18px 30px',
-
-                fontSize: '20px',
-
-                fontWeight: '800',
-
-                cursor:
-                  salvando
-                    ? 'not-allowed'
-                    : 'pointer'
+                backgroundColor: salvando ? '#888' : '#111827', color: '#fff',
+                border: 'none', borderRadius: '10px', padding: '12px 20px',
+                fontSize: '14px', fontWeight: 600,
+                cursor: salvando ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
               }}
             >
-
-              {salvando
-                ? 'Enviando...'
-                : 'Enviar Pedido'}
-
+              {salvando ? 'Enviando...' : 'Enviar pedido'}
             </button>
-
           </div>
-
         </div>
 
       ) : (
-
-        <div
-          style={{
-            backgroundColor: '#f9fafb',
-            borderRadius: '24px',
-            padding: '30px',
-            boxShadow:
-              '0 10px 30px rgba(0,0,0,0.05)'
-          }}
-        >
-
-          <div
-            style={{
-              overflowX: 'auto'
-            }}
-          >
-
-            <table
-              style={{
-                width: '100%',
-                borderCollapse:
-                  'collapse',
-
-                backgroundColor:
-                  '#ffffff'
-              }}
-            >
-
+        /* DESKTOP */
+        <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '0.5px solid rgba(0,0,0,0.1)', padding: '1.25rem' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
               <thead>
-
                 <tr>
-
-                  <th
-                    style={{
-                      border:
-                        '1px solid #d1d5db',
-
-                      padding: '14px',
-
-                      backgroundColor:
-                        '#111827',
-
-                      color: '#ffffff',
-
-                      minWidth: '120px'
-                    }}
-                  >
-                    Cor
-                  </th>
-
+                  <th style={{
+                    border: '1px solid #e5e7eb', padding: '10px 14px',
+                    backgroundColor: '#111827', color: '#fff', minWidth: '100px', textAlign: 'left',
+                  }}>Cor</th>
                   {tamanhos.map((tamanho) => (
-
-                    <th
-                      key={tamanho}
-                      style={{
-                        border:
-                          '1px solid #d1d5db',
-
-                        padding: '14px',
-
-                        backgroundColor:
-                          '#111827',
-
-                        color: '#ffffff',
-
-                        minWidth: '70px'
-                      }}
-                    >
-                      {tamanho}
-                    </th>
-
+                    <th key={tamanho} style={{
+                      border: '1px solid #e5e7eb', padding: '10px',
+                      backgroundColor: '#111827', color: '#fff', minWidth: '60px', textAlign: 'center',
+                    }}>{tamanho}</th>
                   ))}
-
                 </tr>
-
               </thead>
-
               <tbody>
-
                 {cores.map((cor, index) => (
-
-                  <tr
-                    key={cor}
-                    style={{
-                      backgroundColor:
-                        index % 2 === 0
-                          ? '#ffffff'
-                          : '#f9fafb'
-                    }}
-                  >
-
-                    <td
-                      style={{
-                        border:
-                          '1px solid #d1d5db',
-
-                        padding: '14px',
-
-                        fontWeight:
-                          '700',
-
-                        color: '#111827',
-
-                        backgroundColor:
-                          '#f3f4f6'
-                      }}
-                    >
-                      {cor}
-                    </td>
-
+                  <tr key={cor} style={{ backgroundColor: index % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                    <td style={{
+                      border: '1px solid #e5e7eb', padding: '10px 14px',
+                      fontWeight: 500, color: '#111', backgroundColor: '#f5f5f3',
+                    }}>{cor}</td>
                     {tamanhos.map((tamanho) => (
-
-                      <td
-                        key={tamanho}
-                        style={{
-                          border:
-                            '1px solid #d1d5db',
-
-                          padding: '8px',
-
-                          textAlign:
-                            'center'
-                        }}
-                      >
-
+                      <td key={tamanho} style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center' }}>
                         <input
-                          type="number"
-                          min="0"
-
-                          value={
-                            quantidades[
-                              `${cor}-${tamanho}`
-                            ] || ''
-                          }
-
-                          onChange={(e) =>
-                            alterarQuantidade(
-                              cor,
-                              tamanho,
-                              e.target.value
-                            )
-                          }
-
+                          type="number" min="0"
+                          value={quantidades[`${cor}-${tamanho}`] || ''}
+                          onChange={(e) => alterarQuantidade(cor, tamanho, e.target.value)}
                           style={{
-
-                            width: '60px',
-
-                            padding: '10px',
-
-                            border:
-                              '1px solid #d1d5db',
-
-                            borderRadius:
-                              '10px',
-
-                            textAlign:
-                              'center',
-
-                            fontSize:
-                              '16px',
-
-                            fontWeight:
-                              '600',
-
-                            color:
-                              '#111827',
-
-                            backgroundColor:
-                              '#ffffff',
-
-                            outline:
-                              'none'
+                            width: '56px', padding: '6px', border: '0.5px solid rgba(0,0,0,0.15)',
+                            borderRadius: '6px', textAlign: 'center', fontSize: '14px',
+                            fontWeight: 500, color: '#111', backgroundColor: '#fff', outline: 'none',
                           }}
                         />
-
                       </td>
-
                     ))}
-
                   </tr>
-
                 ))}
-
               </tbody>
-
             </table>
-
           </div>
 
-          <div
-            style={{
-              marginTop: '30px',
-
-              display: 'flex',
-
-              justifyContent:
-                'space-between',
-
-              alignItems: 'center',
-
-              flexWrap: 'wrap',
-
-              gap: '20px'
-            }}
-          >
-
+          {/* RODAPÉ DESKTOP */}
+          <div style={{
+            marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', flexWrap: 'wrap', gap: '1rem',
+          }}>
             <div>
-
-              <p
-                style={{
-                  color: '#6b7280',
-                  marginBottom: '8px'
-                }}
-              >
-                Total de pares
-              </p>
-
-              <h2
-                style={{
-                  fontSize: '42px',
-                  fontWeight: '800',
-                  color: '#111827'
-                }}
-              >
-                {totalPares()}
-              </h2>
-
+              <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>Total de pares</div>
+              <div style={{ fontSize: '28px', fontWeight: 600, color: '#111' }}>{totalPares()}</div>
             </div>
-
             <button
-
               onClick={enviarPedido}
-
               disabled={salvando}
-
               style={{
-
-                backgroundColor:
-
-                  salvando
-                    ? '#9ca3af'
-                    : '#111827',
-
-                color: '#ffffff',
-
-                padding:
-                  '16px 32px',
-
-                border: 'none',
-
-                borderRadius: '14px',
-
-                fontWeight: '700',
-
-                fontSize: '16px',
-
-                opacity:
-                  salvando ? 0.7 : 1,
-
-                cursor:
-
-                  salvando
-                    ? 'not-allowed'
-                    : 'pointer'
-
+                backgroundColor: salvando ? '#888' : '#111827', color: '#fff',
+                padding: '10px 24px', border: 'none', borderRadius: '8px',
+                fontWeight: 600, fontSize: '14px', cursor: salvando ? 'not-allowed' : 'pointer',
               }}
             >
-
-              {salvando
-
-                ? 'Enviando...'
-
-                : 'Enviar Pedido'}
-
+              {salvando ? 'Enviando...' : 'Enviar pedido'}
             </button>
-
           </div>
-
         </div>
-
       )}
-
     </div>
-
   )
-
 }

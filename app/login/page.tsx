@@ -1,269 +1,162 @@
 'use client'
 
-import { useState }
-from 'react'
-
-import { useRouter }
-from 'next/navigation'
-
-import { supabase }
-from '@/lib/supabase'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
-
-  const router =
-    useRouter()
-
-  const [email, setEmail] =
-    useState('')
-
-  const [senha, setSenha] =
-    useState('')
-
-  const [loading, setLoading] =
-    useState(false)
-
-  const [erro, setErro] =
-    useState('')
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
 
   async function fazerLogin() {
-
     setLoading(true)
-
     setErro('')
 
-    const { error } =
-
-      await supabase.auth
-        .signInWithPassword({
-
-          email,
-          password: senha
-
-        })
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: senha,
+    })
 
     if (error) {
-
-      setErro(
-        'Email ou senha inválidos'
-      )
-
+      setErro('Email ou senha inválidos')
       setLoading(false)
-
       return
     }
 
-    // EMAIL FORMATADO
+    const { data: cliente, error: erroCliente } = await supabase
+      .from('clientes')
+      .select('tipo')
+      .eq('email', email.toLowerCase())
+      .single()
 
-    const emailFormatado =
-      email.toLowerCase()
-
-    // CLIENTES
-
-    if (
-
-      emailFormatado ===
-      'richardson_fernando@outlook.com'
-
-      ||
-
-      emailFormatado ===
-      'amanda_cristina@gmail.com'
-
-    ) {
-
-      router.push('/cliente')
-
+    if (erroCliente || !cliente) {
+      setErro('Usuário não encontrado no sistema. Contate o administrador.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
     }
 
-    // INDÚSTRIA / ADMIN
-
-    else {
-
+    if (cliente.tipo === 'industria') {
       router.push('/industria')
-
+    } else if (cliente.tipo === 'cliente') {
+      router.push('/cliente')
+    } else {
+      setErro('Tipo de usuário inválido. Contate o administrador.')
+      await supabase.auth.signOut()
+      setLoading(false)
     }
+  }
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !loading) {
+      fazerLogin()
+    }
   }
 
   return (
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#f5f5f3',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      fontFamily: 'sans-serif',
+    }}>
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '16px',
+        padding: '40px',
+        width: '100%',
+        maxWidth: '400px',
+        border: '0.5px solid rgba(0,0,0,0.1)',
+      }}>
 
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: '#f3f4f6',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px'
-      }}
-    >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
+          <div style={{
+            width: '36px', height: '36px',
+            backgroundColor: '#EBF4FF',
+            borderRadius: '8px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '20px',
+          }}>
+            📦
+          </div>
+          <span style={{ fontSize: '16px', fontWeight: 600, color: '#111' }}>
+            Gestão de Pedidos
+          </span>
+        </div>
 
-      <div
-        style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '28px',
-          padding: '40px',
-          width: '100%',
-          maxWidth: '420px',
-          boxShadow:
-            '0 10px 30px rgba(0,0,0,0.08)'
-        }}
-      >
-
-        {/* TÍTULO */}
-
-        <h1
-          style={{
-            fontSize: '42px',
-            fontWeight: '800',
-            color: '#000',
-            marginBottom: '8px'
-          }}
-        >
-          Login
+        <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#111', marginBottom: '6px' }}>
+          Entrar na conta
         </h1>
-
-        <p
-          style={{
-            color: '#6b7280',
-            marginBottom: '36px'
-          }}
-        >
-          Acesse sua conta
+        <p style={{ fontSize: '13px', color: '#888', marginBottom: '28px' }}>
+          Use seu email e senha cadastrados
         </p>
 
-        {/* EMAIL */}
-
-        <div
-          style={{
-            marginBottom: '20px'
-          }}
-        >
-
-          <label
-            style={{
-              display: 'block',
-              marginBottom: '8px',
-              color: '#4b5563',
-              fontSize: '14px'
-            }}
-          >
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', color: '#555', marginBottom: '6px' }}>
             Email
           </label>
-
           <input
             type="email"
             value={email}
-            onChange={(e) =>
-              setEmail(
-                e.target.value
-              )
-            }
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="seu@email.com"
             style={{
-              width: '100%',
-              padding: '16px',
-              borderRadius: '14px',
-              border:
-                '2px solid #d1d5db',
-              backgroundColor: '#fff',
-              color: '#111827',
-              fontSize: '15px',
-              outline: 'none'
+              width: '100%', padding: '10px 14px',
+              borderRadius: '8px', border: '0.5px solid rgba(0,0,0,0.2)',
+              fontSize: '14px', color: '#111', outline: 'none', backgroundColor: '#fff',
             }}
           />
-
         </div>
 
-        {/* SENHA */}
-
-        <div
-          style={{
-            marginBottom: '28px'
-          }}
-        >
-
-          <label
-            style={{
-              display: 'block',
-              marginBottom: '8px',
-              color: '#4b5563',
-              fontSize: '14px'
-            }}
-          >
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontSize: '13px', color: '#555', marginBottom: '6px' }}>
             Senha
           </label>
-
           <input
             type="password"
             value={senha}
-            onChange={(e) =>
-              setSenha(
-                e.target.value
-              )
-            }
+            onChange={(e) => setSenha(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="••••••••"
             style={{
-              width: '100%',
-              padding: '16px',
-              borderRadius: '14px',
-              border:
-                '2px solid #d1d5db',
-              backgroundColor: '#fff',
-              color: '#111827',
-              fontSize: '15px',
-              outline: 'none'
+              width: '100%', padding: '10px 14px',
+              borderRadius: '8px', border: '0.5px solid rgba(0,0,0,0.2)',
+              fontSize: '14px', color: '#111', outline: 'none', backgroundColor: '#fff',
             }}
           />
-
         </div>
 
-        {/* ERRO */}
-
         {erro && (
-
-          <div
-            style={{
-              backgroundColor: '#fee2e2',
-              color: '#b91c1c',
-              padding: '14px',
-              borderRadius: '14px',
-              marginBottom: '24px',
-              fontWeight: '600'
-            }}
-          >
+          <div style={{
+            backgroundColor: '#FCEBEB', color: '#A32D2D',
+            padding: '10px 14px', borderRadius: '8px',
+            marginBottom: '16px', fontSize: '13px', fontWeight: 500,
+          }}>
             {erro}
           </div>
-
         )}
-
-        {/* BOTÃO */}
 
         <button
           onClick={fazerLogin}
           disabled={loading}
           style={{
-            width: '100%',
-            backgroundColor: '#000000',
-            color: '#ffffff',
-            padding: '16px',
-            borderRadius: '14px',
-            fontWeight: '700',
-            fontSize: '16px',
-            border: 'none',
-            cursor: 'pointer',
-            opacity: loading ? 0.7 : 1
+            width: '100%', backgroundColor: loading ? '#888' : '#111827',
+            color: '#ffffff', padding: '11px',
+            borderRadius: '8px', fontWeight: 600, fontSize: '14px',
+            border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-
-          {loading
-            ? 'Entrando...'
-            : 'Entrar'}
-
+          {loading ? 'Entrando...' : 'Entrar'}
         </button>
 
       </div>
-
     </div>
-
   )
 }

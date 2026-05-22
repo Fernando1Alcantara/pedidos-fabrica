@@ -1,781 +1,359 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-import { useParams } from 'next/navigation'
-
+import { useParams, useRouter } from 'next/navigation'
 import jsPDF from 'jspdf'
-
 import autoTable from 'jspdf-autotable'
-
 import { supabase } from '@/lib/supabase'
-
 import { formatarData } from '@/lib/data'
 
 export default function PedidoIndustriaPage() {
-
   const params = useParams()
+  const router = useRouter()
 
-  const [pedido, setPedido] =
-    useState<any>(null)
+  const [pedido, setPedido] = useState<any>(null)
+  const [itens, setItens] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [mobile, setMobile] = useState(false)
 
-  const [itens, setItens] =
-    useState<any[]>([])
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const cores = [
-    'Branco',
-    'Preto',
-    'Bege',
-    'Dourado',
-    'Rosa',
-    'Pink'
-  ]
-
-  const tamanhos = Array.from(
-    { length: 21 },
-    (_, i) => i + 16
-  )
+  const cores = ['Branco', 'Preto', 'Bege', 'Dourado', 'Rosa', 'Pink']
+  const tamanhos = Array.from({ length: 21 }, (_, i) => i + 16)
 
   useEffect(() => {
+    function verificarTela() {
+      setMobile(window.innerWidth < 768)
+    }
+    verificarTela()
+    window.addEventListener('resize', verificarTela)
+    return () => window.removeEventListener('resize', verificarTela)
+  }, [])
 
+  useEffect(() => {
     carregarPedido()
-
   }, [])
 
   async function carregarPedido() {
-
     try {
+      const pedidoId = Array.isArray(params.id) ? params.id[0] : params.id
 
-      const pedidoId =
+      const { data: pedidoData } = await supabase
+        .from('pedidos')
+        .select('*, clientes (nome)')
+        .eq('id', pedidoId)
+        .single()
 
-        Array.isArray(params.id)
-          ? params.id[0]
-          : params.id
-
-      // PEDIDO
-
-      const { data: pedidoData } =
-
-        await supabase
-          .from('pedidos')
-          .select(`
-            *,
-            clientes (
-              nome
-            )
-          `)
-
-          .eq(
-            'id',
-            pedidoId
-          )
-
-          .single()
-
-      // ITENS
-
-      const { data: itensData } =
-
-        await supabase
-          .from('itens_pedido')
-          .select('*')
-
-          .eq(
-            'pedido_id',
-            pedidoId
-          )
+      const { data: itensData } = await supabase
+        .from('itens_pedido')
+        .select('*')
+        .eq('pedido_id', pedidoId)
 
       setPedido(pedidoData)
-
       setItens(itensData || [])
-
       setLoading(false)
-
-    }
-
-    catch (erro) {
-
-      console.log(erro)
-
+    } catch (erro) {
+      console.error(erro)
       setLoading(false)
-
     }
-
   }
 
-  function buscarQuantidade(
-    cor: string,
-    tamanho: number
-  ) {
-
-    const item =
-      itens.find(
-
-        (i) =>
-          i.cor === cor &&
-          i.tamanho === tamanho
-
-      )
-
-    return item
-      ? item.quantidade
-      : ''
-
+  function buscarQuantidade(cor: string, tamanho: number) {
+    const item = itens.find((i) => i.cor === cor && i.tamanho === tamanho)
+    return item ? item.quantidade : 0
   }
 
-  function totalPorCor(
-    cor: string
-  ) {
-
-    return itens
-
-      .filter(
-        (item) =>
-          item.cor === cor
-      )
-
-      .reduce(
-
-        (acc, item) =>
-
-          acc + item.quantidade,
-
-        0
-
-      )
-
+  function totalPorCor(cor: string) {
+    return itens.filter((i) => i.cor === cor).reduce((acc, i) => acc + i.quantidade, 0)
   }
 
   function totalGeral() {
-
-    return itens.reduce(
-
-      (acc, item) =>
-
-        acc + item.quantidade,
-
-      0
-
-    )
-
+    return itens.reduce((acc, i) => acc + i.quantidade, 0)
   }
 
-  async function alterarStatus(
-    novoStatus: string
-  ) {
-
-    await supabase
-      .from('pedidos')
-      .update({
-
-        status: novoStatus
-
-      })
-
-      .eq(
-        'id',
-        pedido.id
-      )
-
-    setPedido({
-
-      ...pedido,
-
-      status: novoStatus
-
-    })
-
+  async function alterarStatus(novoStatus: string) {
+    await supabase.from('pedidos').update({ status: novoStatus }).eq('id', pedido.id)
+    setPedido({ ...pedido, status: novoStatus })
   }
 
   async function gerarPDF() {
-
-    const pdf = new jsPDF(
-      'landscape',
-      'mm',
-      'a4'
-    )
-
+    const pdf = new jsPDF('landscape', 'mm', 'a4')
     pdf.setFontSize(22)
-
-    pdf.text(
-      'Pedido de Sapatilhas',
-      14,
-      18
-    )
-
+    pdf.text('Pedido de Sapatilhas', 14, 18)
     pdf.setFontSize(12)
+    pdf.text(`Cliente: ${pedido.clientes?.nome}`, 14, 28)
+    pdf.text(`Data: ${formatarData(pedido.created_at)}`, 14, 35)
 
-    pdf.text(
-      `Cliente: ${pedido.clientes?.nome}`,
-      14,
-      28
-    )
-
-    pdf.text(
-      `Data: ${formatarData(
-        pedido.created_at
-      )}`,
-      14,
-      35
-    )
-
-    const head = [
-      [
-        'Cor',
-        ...tamanhos,
-        'Total'
-      ]
-    ]
-
+    const head = [['Cor', ...tamanhos, 'Total']]
     const body = cores.map((cor) => [
-
       cor,
-
-      ...tamanhos.map((tamanho) =>
-
-        buscarQuantidade(
-          cor,
-          tamanho
-        )
-
-      ),
-
-      totalPorCor(cor)
-
+      ...tamanhos.map((t) => buscarQuantidade(cor, t) || ''),
+      totalPorCor(cor) || '',
     ])
 
     autoTable(pdf, {
-
-      startY: 45,
-
-      head,
-
-      body,
-
-      styles: {
-
-        halign: 'center',
-
-        fontSize: 8
-
-      },
-
-      headStyles: {
-
-        fillColor: [17, 24, 39]
-
-      }
-
+      startY: 45, head, body,
+      styles: { halign: 'center', fontSize: 8 },
+      headStyles: { fillColor: [17, 24, 39] },
     })
 
-    const finalY =
-      (pdf as any)
-        .lastAutoTable
-        ?.finalY || 60
-
+    const finalY = (pdf as any).lastAutoTable?.finalY || 60
     pdf.setFontSize(16)
+    pdf.text(`Total de Pares: ${totalGeral()}`, 14, finalY + 12)
+    pdf.save(`pedido-${pedido.id}.pdf`)
 
-    pdf.text(
+    await supabase.from('pedidos').update({ status: 'Impresso' }).eq('id', pedido.id)
+    setPedido({ ...pedido, status: 'Impresso' })
+  }
 
-      `Total de Pares: ${totalGeral()}`,
-
-      14,
-
-      finalY + 12
-
-    )
-
-    // BAIXAR PDF
-
-    pdf.save(
-      `pedido-${pedido.id}.pdf`
-    )
-
-    // ALTERAR STATUS
-
-    await supabase
-      .from('pedidos')
-      .update({
-
-        status: 'Impresso'
-
-      })
-
-      .eq(
-        'id',
-        pedido.id
-      )
-
-    // ATUALIZAR TELA
-
-    setPedido({
-
-      ...pedido,
-
-      status: 'Impresso'
-
-    })
-
+  function corStatus(status: string) {
+    if (status === 'Finalizado') return { fundo: '#EAF3DE', texto: '#3B6D11' }
+    if (status === 'Impresso') return { fundo: '#E6F1FB', texto: '#185FA5' }
+    return { fundo: '#FAEEDA', texto: '#854F0B' }
   }
 
   if (loading) {
-
     return (
-
-      <div
-        style={{
-          padding: '40px'
-        }}
-      >
+      <div style={{
+        minHeight: '100vh', backgroundColor: '#f5f5f3',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'sans-serif', color: '#888', fontSize: '15px',
+      }}>
         Carregando pedido...
       </div>
-
     )
-
   }
 
   if (!pedido) {
-
     return (
-
-      <div
-        style={{
-          padding: '40px'
-        }}
-      >
-        Pedido não encontrado
+      <div style={{
+        minHeight: '100vh', backgroundColor: '#f5f5f3',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'sans-serif', color: '#888', fontSize: '15px',
+      }}>
+        Pedido não encontrado.
       </div>
-
     )
-
   }
 
+  const statusCor = corStatus(pedido.status)
+
   return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f3', padding: mobile ? '1rem' : '2rem', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: '#ffffff',
-        padding: '40px'
-      }}
-    >
-
-      {/* TOPO */}
-
-      <div
-        style={{
-          marginBottom: '30px'
-        }}
-      >
-
-        <h1
-          style={{
-            fontSize: '48px',
-            fontWeight: '800',
-            color: '#111827'
-          }}
-        >
-          Pedido
-        </h1>
-
-        <p
-          style={{
-            marginTop: '10px',
-            color: '#6b7280'
-          }}
-        >
-          #{pedido.id.slice(0, 8)}
-        </p>
-
-      </div>
-
-      {/* CARD */}
-
-      <div
-        style={{
-          backgroundColor: '#f9fafb',
-          borderRadius: '24px',
-          padding: '30px',
-          boxShadow:
-            '0 10px 30px rgba(0,0,0,0.05)'
-        }}
-      >
-
-        {/* CLIENTE */}
-
-        <div
-          style={{
-            marginBottom: '30px'
-          }}
-        >
-
-          <p
+        {/* HEADER */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <button
+            onClick={() => router.push('/pedidos')}
             style={{
-              color: '#6b7280'
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '13px', color: '#185FA5', padding: 0, marginBottom: '12px',
+              display: 'flex', alignItems: 'center', gap: '4px',
             }}
           >
-            Cliente
+            ← Voltar
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#111', margin: 0 }}>
+              Pedido #{pedido.id.slice(0, 8)}
+            </h1>
+            <span style={{
+              fontSize: '12px', fontWeight: 500, padding: '3px 10px',
+              borderRadius: '20px', backgroundColor: statusCor.fundo, color: statusCor.texto,
+            }}>
+              {pedido.status}
+            </span>
+          </div>
+          <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
+            {pedido.clientes?.nome} · {formatarData(pedido.created_at)}
           </p>
-
-          <h2
-            style={{
-              fontSize: '32px',
-              fontWeight: '800',
-              color: '#111827'
-            }}
-          >
-            {pedido.clientes?.nome}
-          </h2>
-
-          <p
-            style={{
-              marginTop: '10px',
-              color: '#6b7280'
-            }}
-          >
-            {formatarData(
-              pedido.created_at
-            )}
-          </p>
-
         </div>
 
         {/* BOTÕES */}
-
-        <div
-          style={{
-            display: 'flex',
-            gap: '14px',
-            marginBottom: '30px',
-            flexWrap: 'wrap'
-          }}
-        >
-
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           <button
             onClick={gerarPDF}
             style={{
-              backgroundColor:
-                '#111827',
-
-              color: '#fff',
-
-              border: 'none',
-
-              padding:
-                '12px 22px',
-
-              borderRadius: '12px',
-
-              fontWeight: '700',
-
-              cursor: 'pointer'
+              backgroundColor: '#111827', color: '#fff', border: 'none',
+              padding: '9px 18px', borderRadius: '8px',
+              fontWeight: 500, fontSize: '13px', cursor: 'pointer',
             }}
           >
             Gerar PDF
           </button>
-
           <button
-            onClick={() =>
-              alterarStatus(
-                'Finalizado'
-              )
-            }
+            onClick={() => alterarStatus('Finalizado')}
             style={{
-              backgroundColor:
-                '#16a34a',
-
-              color: '#fff',
-
-              border: 'none',
-
-              padding:
-                '12px 22px',
-
-              borderRadius: '12px',
-
-              fontWeight: '700',
-
-              cursor: 'pointer'
+              backgroundColor: '#3B6D11', color: '#fff', border: 'none',
+              padding: '9px 18px', borderRadius: '8px',
+              fontWeight: 500, fontSize: '13px', cursor: 'pointer',
             }}
           >
-            Finalizar Pedido
+            Finalizar pedido
           </button>
-
+          {pedido.status !== 'Recebido' && (
+            <button
+              onClick={() => alterarStatus('Recebido')}
+              style={{
+                backgroundColor: '#fff', color: '#111',
+                border: '0.5px solid rgba(0,0,0,0.2)',
+                padding: '9px 18px', borderRadius: '8px',
+                fontWeight: 500, fontSize: '13px', cursor: 'pointer',
+              }}
+            >
+              Voltar para Recebido
+            </button>
+          )}
         </div>
 
-        {/* STATUS */}
+        {/* CARD */}
+        <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '0.5px solid rgba(0,0,0,0.1)', padding: '1.25rem' }}>
 
-        <div
-          style={{
-            marginBottom: '30px'
-          }}
-        >
-
-          <span
-            style={{
-              backgroundColor:
-                pedido.status ===
-                'Finalizado'
-                  ? '#dcfce7'
-                  : pedido.status ===
-                    'Impresso'
-                  ? '#dbeafe'
-                  : '#fef3c7',
-
-              color:
-                pedido.status ===
-                'Finalizado'
-                  ? '#166534'
-                  : pedido.status ===
-                    'Impresso'
-                  ? '#1d4ed8'
-                  : '#92400e',
-
-              padding:
-                '12px 20px',
-
-              borderRadius:
-                '999px',
-
-              fontWeight: '700'
-            }}
-          >
-            {pedido.status}
-          </span>
-
-        </div>
-
-        {/* TABELA */}
-
-        <div
-          style={{
-            overflowX: 'auto'
-          }}
-        >
-
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              backgroundColor: '#ffffff'
-            }}
-          >
-
-            <thead>
-
-              <tr>
-
-                <th
-                  style={{
-                    border:
-                      '1px solid #d1d5db',
-
-                    padding: '12px',
-
-                    backgroundColor:
-                      '#111827',
-
-                    color: '#ffffff',
-
-                    minWidth: '120px'
-                  }}
-                >
-                  Cor
-                </th>
-
-                {tamanhos.map((tamanho) => (
-
-                  <th
-                    key={tamanho}
-                    style={{
-                      border:
-                        '1px solid #d1d5db',
-
-                      padding: '12px',
-
-                      backgroundColor:
-                        '#111827',
-
-                      color: '#ffffff',
-
-                      minWidth: '60px'
-                    }}
-                  >
-                    {tamanho}
-                  </th>
-
-                ))}
-
-                <th
-                  style={{
-                    border:
-                      '1px solid #d1d5db',
-
-                    padding: '12px',
-
-                    backgroundColor:
-                      '#16a34a',
-
-                    color: '#ffffff',
-
-                    minWidth: '90px'
-                  }}
-                >
-                  Total
-                </th>
-
-              </tr>
-
-            </thead>
-
-            <tbody>
-
-              {cores.map((cor, index) => (
-
-                <tr
-                  key={cor}
-                  style={{
-                    backgroundColor:
-                      index % 2 === 0
-                        ? '#ffffff'
-                        : '#f9fafb'
-                  }}
-                >
-
-                  <td
-                    style={{
-                      border:
-                        '1px solid #d1d5db',
-
-                      padding: '12px',
-
-                      fontWeight: '700',
-
-                      color: '#111827',
-
-                      backgroundColor:
-                        '#f3f4f6'
-                    }}
-                  >
-                    {cor}
-                  </td>
-
-                  {tamanhos.map((tamanho) => {
-
-                    const quantidade =
-                      buscarQuantidade(
-                        cor,
-                        tamanho
-                      )
-
-                    return (
-
-                      <td
-                        key={tamanho}
-                        style={{
-                          border:
-                            '1px solid #d1d5db',
-
-                          padding: '12px',
-
-                          textAlign: 'center',
-
-                          fontWeight:
-                            quantidade
-                              ? '700'
-                              : '400',
-
-                          color:
-                            quantidade
-                              ? '#111827'
-                              : '#9ca3af',
-
-                          backgroundColor:
-                            quantidade
-                              ? '#dcfce7'
-                              : 'transparent'
-                        }}
-                      >
-                        {quantidade}
+          {/* DESKTOP — coluna cor e total fixadas */}
+          {!mobile && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      border: '1px solid #e5e7eb', padding: '10px 14px',
+                      backgroundColor: '#111827', color: '#fff', textAlign: 'left',
+                      position: 'sticky', left: 0, zIndex: 2, minWidth: '90px',
+                    }}>Cor</th>
+                    {tamanhos.map((t) => (
+                      <th key={t} style={{
+                        border: '1px solid #e5e7eb', padding: '10px 6px',
+                        backgroundColor: '#111827', color: '#fff',
+                        textAlign: 'center', minWidth: '46px', fontSize: '12px',
+                      }}>{t}</th>
+                    ))}
+                    <th style={{
+                      border: '1px solid #e5e7eb', padding: '10px',
+                      backgroundColor: '#3B6D11', color: '#fff',
+                      textAlign: 'center', minWidth: '60px',
+                      position: 'sticky', right: 0, zIndex: 2,
+                    }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cores.map((cor, index) => (
+                    <tr key={cor} style={{ backgroundColor: index % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                      <td style={{
+                        border: '1px solid #e5e7eb', padding: '10px 14px',
+                        fontWeight: 500, color: '#111',
+                        backgroundColor: index % 2 === 0 ? '#f5f5f3' : '#eeeee9',
+                        position: 'sticky', left: 0, zIndex: 1,
+                      }}>{cor}</td>
+                      {tamanhos.map((tamanho) => {
+                        const qty = buscarQuantidade(cor, tamanho)
+                        return (
+                          <td key={tamanho} style={{
+                            border: '1px solid #e5e7eb', padding: '10px 6px',
+                            textAlign: 'center', fontSize: '13px',
+                            backgroundColor: qty ? '#EAF3DE' : '#fff',
+                            color: qty ? '#3B6D11' : '#ddd',
+                            fontWeight: qty ? 600 : 400,
+                          }}>
+                            {qty || ''}
+                          </td>
+                        )
+                      })}
+                      <td style={{
+                        border: '1px solid #e5e7eb', padding: '10px',
+                        textAlign: 'center', backgroundColor: '#EAF3DE',
+                        color: '#3B6D11', fontWeight: 600, fontSize: '13px',
+                        position: 'sticky', right: 0, zIndex: 1,
+                      }}>
+                        {totalPorCor(cor) || ''}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-                    )
+          {/* MOBILE — cards por cor */}
+          {mobile && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {cores.map((cor) => {
+                const total = totalPorCor(cor)
+                const tamanhosComQtd = tamanhos.filter((t) => buscarQuantidade(cor, t) > 0)
 
-                  })}
+                return (
+                  <div key={cor} style={{ border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: '8px', overflow: 'hidden' }}>
+                    <div style={{
+                      backgroundColor: '#111827', color: '#fff',
+                      padding: '8px 14px',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                      <span style={{ fontWeight: 500, fontSize: '14px' }}>{cor}</span>
+                      {total > 0 && (
+                        <span style={{
+                          backgroundColor: '#3B6D11', color: '#fff',
+                          fontSize: '12px', fontWeight: 600,
+                          padding: '2px 10px', borderRadius: '20px',
+                        }}>
+                          {total} pares
+                        </span>
+                      )}
+                    </div>
+                    {tamanhosComQtd.length === 0 ? (
+                      <div style={{ padding: '10px 14px', fontSize: '12px', color: '#aaa' }}>
+                        Sem itens nesta cor
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))',
+                        gap: '6px', padding: '10px',
+                      }}>
+                        {tamanhosComQtd.map((tamanho) => {
+                          const qty = buscarQuantidade(cor, tamanho)
+                          return (
+                            <div key={tamanho} style={{
+                              backgroundColor: '#EAF3DE', borderRadius: '6px',
+                              padding: '6px 4px', textAlign: 'center',
+                            }}>
+                              <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>nº {tamanho}</div>
+                              <div style={{ fontSize: '16px', fontWeight: 600, color: '#3B6D11' }}>{qty}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
 
-                  <td
-                    style={{
-                      border:
-                        '1px solid #d1d5db',
+              {/* TOTAL GERAL MOBILE */}
+              {totalGeral() > 0 && (
+                <div style={{
+                  backgroundColor: '#111827', color: '#fff',
+                  padding: '12px 16px', borderRadius: '8px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: 500 }}>Total geral</span>
+                  <span style={{ fontSize: '18px', fontWeight: 600 }}>{totalGeral()} pares</span>
+                </div>
+              )}
+            </div>
+          )}
 
-                      padding: '12px',
-
-                      textAlign: 'center',
-
-                      fontWeight: '800',
-
-                      backgroundColor:
-                        '#dcfce7',
-
-                      color: '#166534'
-                    }}
-                  >
-                    {totalPorCor(cor)}
-                  </td>
-
-                </tr>
-
-              ))}
-
-            </tbody>
-
-          </table>
+          {/* TOTAL DESKTOP */}
+          {!mobile && totalGeral() > 0 && (
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{
+                backgroundColor: '#111827', color: '#fff',
+                padding: '10px 20px', borderRadius: '8px',
+                fontSize: '15px', fontWeight: 600,
+              }}>
+                Total de pares: {totalGeral()}
+              </div>
+            </div>
+          )}
 
         </div>
-
-        {/* TOTAL GERAL */}
-
-        <div
-          style={{
-            marginTop: '24px',
-
-            display: 'flex',
-
-            justifyContent: 'flex-end'
-          }}
-        >
-
-          <div
-            style={{
-              backgroundColor:
-                '#111827',
-
-              color: '#ffffff',
-
-              padding:
-                '16px 24px',
-
-              borderRadius: '16px',
-
-              fontSize: '20px',
-
-              fontWeight: '800'
-            }}
-          >
-            Total de Pares:
-            {' '}
-            {totalGeral()}
-          </div>
-
-        </div>
-
       </div>
-
     </div>
-
   )
-
 }

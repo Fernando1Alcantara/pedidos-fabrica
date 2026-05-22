@@ -1,369 +1,215 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function DashboardPage() {
+  const router = useRouter()
 
-  const [paresHoje, setParesHoje] =
-    useState(0)
-
-  const [pedidosHoje, setPedidosHoje] =
-    useState(0)
-
-  const [clientesHoje, setClientesHoje] =
-    useState(0)
-
-  const [emProducao, setEmProducao] =
-    useState(0)
-
-  const [coresMaisVendidas, setCoresMaisVendidas] =
-    useState<any[]>([])
-
-  const [tamanhosMaisVendidos, setTamanhosMaisVendidos] =
-    useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [paresHoje, setParesHoje] = useState(0)
+  const [pedidosHoje, setPedidosHoje] = useState(0)
+  const [clientesHoje, setClientesHoje] = useState(0)
+  const [emProducao, setEmProducao] = useState(0)
+  const [coresMaisVendidas, setCoresMaisVendidas] = useState<any[]>([])
+  const [tamanhosMaisVendidos, setTamanhosMaisVendidos] = useState<any[]>([])
 
   useEffect(() => {
-
-    carregarDashboard()
-
+    verificarECarregar()
   }, [])
 
+  async function verificarECarregar() {
+    // 1. VERIFICAR SE ESTÁ LOGADO
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    // 2. VERIFICAR SE É industria
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('tipo')
+      .eq('email', user.email)
+      .single()
+
+    if (!cliente || cliente.tipo !== 'industria') {
+      router.push('/cliente')
+      return
+    }
+
+    await carregarDashboard()
+    setLoading(false)
+  }
+
   async function carregarDashboard() {
-
     try {
+      const hoje = new Date().toISOString().split('T')[0]
 
-      const hoje =
-        new Date()
-          .toISOString()
-          .split('T')[0]
+      // PEDIDOS — filtrado por data no banco, não em memória
+      const { data: pedidos } = await supabase
+        .from('pedidos')
+        .select('id, created_at, status, cliente_id')
+        .gte('created_at', hoje + 'T00:00:00')
+        .lte('created_at', hoje + 'T23:59:59')
 
-      // PEDIDOS
-      const { data: pedidos } =
-        await supabase
-          .from('pedidos')
-          .select('*')
+      // PEDIDOS EM PRODUÇÃO — query separada
+      const { count: countProducao } = await supabase
+        .from('pedidos')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'Em Produção')
 
-      // ITENS
-      const { data: itens } =
-        await supabase
-          .from('itens_pedido')
-          .select(`
-            quantidade,
-            produtos (
-              cor,
-              tamanho
-            ),
-            pedidos (
-              created_at,
-              status,
-              cliente_id
-            )
-          `)
+      setEmProducao(countProducao || 0)
+      setPedidosHoje((pedidos || []).length)
 
-      if (!pedidos || !itens) return
+      const clientesUnicos = new Set((pedidos || []).map((p) => p.cliente_id))
+      setClientesHoje(clientesUnicos.size)
 
-      // PEDIDOS HOJE
-      const pedidosHojeLista =
-        pedidos.filter((pedido) => {
+      // IDS DOS PEDIDOS DE HOJE
+      const ids = (pedidos || []).map((p) => p.id)
 
-          if (!pedido.created_at) {
-            return false
-          }
+      if (ids.length === 0) {
+        setParesHoje(0)
+        setCoresMaisVendidas([])
+        setTamanhosMaisVendidos([])
+        return
+      }
 
-          const data =
-            new Date(pedido.created_at)
-              .toISOString()
-              .split('T')[0]
+      // ITENS DOS PEDIDOS DE HOJE — sem join com produtos (não existe)
+      const { data: itens } = await supabase
+        .from('itens_pedido')
+        .select('quantidade, cor, tamanho')
+        .in('pedido_id', ids)
 
-          return data === hoje
-
-        })
-
-      setPedidosHoje(
-        pedidosHojeLista.length
-      )
-
-      // CLIENTES HOJE
-      const clientesUnicos =
-        new Set(
-          pedidosHojeLista.map(
-            (pedido) => pedido.cliente_id
-          )
-        )
-
-      setClientesHoje(
-        clientesUnicos.size
-      )
-
-      // EM PRODUÇÃO
-      const producao =
-        pedidos.filter(
-          (pedido) =>
-            pedido.status ===
-            'Em Produção'
-        )
-
-      setEmProducao(
-        producao.length
-      )
-
-      // PARES HOJE
-      let totalParesHoje = 0
-
+      let totalPares = 0
       const cores: Record<string, number> = {}
       const tamanhos: Record<string, number> = {}
 
-      itens.forEach((item: any) => {
+      ;(itens || []).forEach((item: any) => {
+        const qty = Number(item.quantidade || 0)
+        totalPares += qty
 
-        if (
-          !item.produtos ||
-          !item.pedidos
-        ) {
-          return
+        if (item.cor) {
+          cores[item.cor] = (cores[item.cor] || 0) + qty
         }
 
-        const quantidade =
-          item.quantidade || 0
-
-        const createdAt =
-          item.pedidos?.created_at
-
-        if (!createdAt) {
-          return
+        if (item.tamanho) {
+          const t = String(item.tamanho)
+          tamanhos[t] = (tamanhos[t] || 0) + qty
         }
-
-        const data =
-          new Date(createdAt)
-            .toISOString()
-            .split('T')[0]
-
-        // PARES HOJE
-        if (data === hoje) {
-          totalParesHoje += quantidade
-        }
-
-        // COR
-        const cor =
-          item.produtos?.cor
-
-        if (cor) {
-
-          if (!cores[cor]) {
-            cores[cor] = 0
-          }
-
-          cores[cor] += quantidade
-
-        }
-
-        // TAMANHO
-        const tamanho =
-          item.produtos?.tamanho
-
-        if (tamanho) {
-
-          if (!tamanhos[tamanho]) {
-            tamanhos[tamanho] = 0
-          }
-
-          tamanhos[tamanho] += quantidade
-
-        }
-
       })
 
-      setParesHoje(
-        totalParesHoje
-      )
-
-      // TOP CORES
-      const rankingCores =
-        Object.entries(cores)
-          .map(([nome, total]) => ({
-            nome,
-            total
-          }))
-          .sort(
-            (a, b) =>
-              Number(b.total) -
-              Number(a.total)
-          )
-          .slice(0, 5)
+      setParesHoje(totalPares)
 
       setCoresMaisVendidas(
-        rankingCores
-      )
-
-      // TOP TAMANHOS
-      const rankingTamanhos =
-        Object.entries(tamanhos)
-          .map(([nome, total]) => ({
-            nome,
-            total
-          }))
-          .sort(
-            (a, b) =>
-              Number(b.total) -
-              Number(a.total)
-          )
+        Object.entries(cores)
+          .map(([nome, total]) => ({ nome, total }))
+          .sort((a, b) => b.total - a.total)
           .slice(0, 5)
+      )
 
       setTamanhosMaisVendidos(
-        rankingTamanhos
+        Object.entries(tamanhos)
+          .map(([nome, total]) => ({ nome, total }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5)
       )
-
     } catch (error) {
-
-      console.log(error)
-
+      console.error(error)
     }
   }
 
-  function Card({
-    titulo,
-    valor
-  }: any) {
-
+  if (loading) {
     return (
-
-      <div className="bg-white rounded-2xl shadow-lg p-6 flex-1">
-
-        <p className="text-gray-500 mb-2">
-          {titulo}
-        </p>
-
-        <h2 className="text-4xl font-bold text-black">
-          {valor}
-        </h2>
-
+      <div style={{
+        minHeight: '100vh', backgroundColor: '#f5f5f3',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'sans-serif', color: '#888', fontSize: '15px',
+      }}>
+        Carregando dashboard...
       </div>
-
     )
   }
 
   return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f3', padding: '2rem', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
 
-    <div className="min-h-screen bg-gray-100 p-10">
-
-      <div className="max-w-7xl mx-auto">
-
-        <div className="mb-8">
-
-          <h1 className="text-4xl font-bold text-black mb-2">
-            Dashboard
-          </h1>
-
-          <p className="text-gray-600">
-            Visão geral operacional
-          </p>
-
+        {/* HEADER */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#111', margin: 0 }}>Dashboard</h1>
+          <p style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>Visão geral operacional — hoje</p>
         </div>
 
         {/* KPIs */}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-
-          <Card
-            titulo="Pares Hoje"
-            valor={paresHoje}
-          />
-
-          <Card
-            titulo="Pedidos Hoje"
-            valor={pedidosHoje}
-          />
-
-          <Card
-            titulo="Clientes Hoje"
-            valor={clientesHoje}
-          />
-
-          <Card
-            titulo="Em Produção"
-            valor={emProducao}
-          />
-
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
+          {[
+            { label: 'Pares hoje', valor: paresHoje },
+            { label: 'Pedidos hoje', valor: pedidosHoje },
+            { label: 'Clientes hoje', valor: clientesHoje },
+            { label: 'Em produção', valor: emProducao },
+          ].map((kpi) => (
+            <div key={kpi.label} style={{
+              backgroundColor: '#eeeee9', borderRadius: '8px', padding: '1rem',
+            }}>
+              <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>{kpi.label}</div>
+              <div style={{ fontSize: '28px', fontWeight: 600, color: '#111' }}>{kpi.valor}</div>
+            </div>
+          ))}
         </div>
 
         {/* RANKINGS */}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
 
           {/* CORES */}
-
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-
-            <h2 className="text-2xl font-bold text-black mb-6">
-              Cores Mais Vendidas
+          <div style={{ backgroundColor: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: '12px', padding: '1.25rem' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111', marginBottom: '1rem' }}>
+              Cores mais pedidas hoje
             </h2>
-
-            <div className="space-y-4">
-
-              {coresMaisVendidas.map(
-                (item, index) => (
-
-                  <div
-                    key={index}
-                    className="flex items-center justify-between border-b pb-3"
-                  >
-
-                    <span className="text-black font-medium">
-                      {item.nome}
-                    </span>
-
-                    <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-bold">
-                      {item.total}
-                    </span>
-
-                  </div>
-
-                )
-              )}
-
-            </div>
-
+            {coresMaisVendidas.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#aaa' }}>Nenhum dado hoje</p>
+            ) : (
+              coresMaisVendidas.map((item) => (
+                <div key={item.nome} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '8px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+                }}>
+                  <span style={{ fontSize: '13px', color: '#111' }}>{item.nome}</span>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 600, padding: '2px 10px',
+                    borderRadius: '20px', backgroundColor: '#EBF4FF', color: '#185FA5',
+                  }}>{item.total}</span>
+                </div>
+              ))
+            )}
           </div>
 
           {/* TAMANHOS */}
-
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-
-            <h2 className="text-2xl font-bold text-black mb-6">
-              Tamanhos Mais Vendidos
+          <div style={{ backgroundColor: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: '12px', padding: '1.25rem' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#111', marginBottom: '1rem' }}>
+              Tamanhos mais pedidos hoje
             </h2>
-
-            <div className="space-y-4">
-
-              {tamanhosMaisVendidos.map(
-                (item, index) => (
-
-                  <div
-                    key={index}
-                    className="flex items-center justify-between border-b pb-3"
-                  >
-
-                    <span className="text-black font-medium">
-                      {item.nome}
-                    </span>
-
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded-lg font-bold">
-                      {item.total}
-                    </span>
-
-                  </div>
-
-                )
-              )}
-
-            </div>
-
+            {tamanhosMaisVendidos.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#aaa' }}>Nenhum dado hoje</p>
+            ) : (
+              tamanhosMaisVendidos.map((item) => (
+                <div key={item.nome} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '8px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+                }}>
+                  <span style={{ fontSize: '13px', color: '#111' }}>{item.nome}</span>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 600, padding: '2px 10px',
+                    borderRadius: '20px', backgroundColor: '#EAF3DE', color: '#3B6D11',
+                  }}>{item.total}</span>
+                </div>
+              ))
+            )}
           </div>
 
         </div>
-
       </div>
-
     </div>
   )
 }
